@@ -230,7 +230,6 @@ Git history, raw tool output, or conversation transcripts.
             self._atomic_write(path, self._render(design, entries))
             return {
                 **result,
-                "design_path": str(design),
                 "memory_path": str(path),
                 "pruned": pruned,
                 "memory": {**self._stats(design, entries, True), "pruned_entries": len(pruned)},
@@ -249,7 +248,7 @@ Git history, raw tool output, or conversation transcripts.
                 {"decision": normalized, "reasoning": rationale},
             )
             entries.append(entry)
-            return {"decision": {key: value for key, value in entry.items() if key != "kind"}}
+            return {}
 
         return self._mutate(design_file_path, operation)
 
@@ -272,7 +271,7 @@ Git history, raw tool output, or conversation transcripts.
             def create(entries: list[dict[str, Any]]) -> dict[str, Any]:
                 entry = self._entry("Issue", self._new_id("i", entries), fields)
                 entries.append(entry)
-                return {"issue": {key: value for key, value in entry.items() if key != "kind"}}
+                return {"issue_id": entry["id"]}
 
             return self._mutate(design_file_path, create)
 
@@ -294,7 +293,7 @@ Git history, raw tool output, or conversation transcripts.
                 self._validate_issue(changed["status"], changed["resolution"])
                 entries.pop(index)
                 entries.append(changed)
-                return {"issue": {key: value for key, value in changed.items() if key != "kind"}}
+                return {"issue_id": changed["id"]}
             raise ValueError(f"issue not found: {normalized_id}")
 
         return self._mutate(design_file_path, update)

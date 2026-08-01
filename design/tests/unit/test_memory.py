@@ -18,10 +18,15 @@ def make_memory(tmp_path: Path) -> tuple[MemoryStore, Path]:
     return MemoryStore(DesignStore(Settings(plan))), design
 
 
-def test_issue_lifecycle_uses_stable_id_and_filters_resolved(tmp_path: Path) -> None:
+def test_mutation_responses_are_compact_and_issue_ids_are_stable(tmp_path: Path) -> None:
     memory, design = make_memory(tmp_path)
+    recorded = memory.record_decision(
+        str(design),
+        decision="Use durable operation identities",
+        reasoning="Retries must not duplicate output",
+    )
     created = memory.set_issue(str(design), issue="A retry can duplicate output")
-    issue_id = created["issue"]["id"]
+    issue_id = created["issue_id"]
 
     updated = memory.set_issue(
         str(design),
@@ -30,7 +35,13 @@ def test_issue_lifecycle_uses_stable_id_and_filters_resolved(tmp_path: Path) -> 
         resolution="Persist the operation identity before retrying.",
     )
 
-    assert updated["issue"]["id"] == issue_id
+    assert set(recorded) == {"memory_path", "pruned", "memory"}
+    assert set(created) == {"issue_id", "memory_path", "pruned", "memory"}
+    assert set(updated) == {"issue_id", "memory_path", "pruned", "memory"}
+    assert updated["issue_id"] == issue_id
+    assert updated["memory"]["decisions"] == 1
+    assert updated["memory"]["issues"] == 1
+    assert updated["memory"]["open_issues"] == 0
     assert memory.list_open_issues(str(design))["open_issues"] == []
 
 

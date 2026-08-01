@@ -40,7 +40,24 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         verified = await client.call_tool(
             "verify", {"design_file_path": built.structured_content["design_path"]}
         )
+        recorded = await client.call_tool(
+            "memory_record_decision",
+            {
+                "design_file_path": built.structured_content["design_path"],
+                "decision": "Use durable operation identities",
+                "reasoning": "Retries must not duplicate output",
+            },
+        )
+        issue = await client.call_tool(
+            "memory_set_issue",
+            {
+                "design_file_path": built.structured_content["design_path"],
+                "issue": "A retry can duplicate output",
+            },
+        )
 
     assert indexed.structured_content["requirement_count"] == 1
     assert verified.is_error is False
     assert verified.structured_content["verified"] is True
+    assert set(recorded.structured_content) == {"memory_path", "pruned", "memory"}
+    assert set(issue.structured_content) == {"issue_id", "memory_path", "pruned", "memory"}
