@@ -1,0 +1,1 @@
+"""Design lifecycle MCP server."""

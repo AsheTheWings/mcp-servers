@@ -1,0 +1,38 @@
+[project]
+name = "mcp-servers"
+version = "0.1.0"
+description = "Workspace for local MCP servers"
+requires-python = ">=3.11"
+
+[dependency-groups]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.16.1",
+  "ty==0.0.65",
+]
+
+[tool.uv.workspace]
+members = ["design"]
+
+[tool.pytest.ini_options]
+addopts = "--strict-config --strict-markers --import-mode=importlib"
+testpaths = ["design"]
+python_files = ["test_*.py"]
+markers = [
+  "component: in-process test through an MCP protocol boundary",
+  "conformance: static repository and configuration invariant",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ty.src]
+exclude = ["design/tests/**"]

@@ -1,0 +1,12 @@
+# Local client registration for the design server implemented in this repository.
+
+[mcp_servers.design]
+command = "uv"
+args = [
+  "--directory",
+  "/root/Desktop/mcp-servers",
+  "run",
+  "--package",
+  "mcp-server-design",
+  "mcp-design",
+]
