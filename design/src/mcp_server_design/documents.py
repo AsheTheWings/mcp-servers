@@ -10,7 +10,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import yaml
 
@@ -46,6 +46,11 @@ class Document:
     def render(self) -> str:
         header = yaml.safe_dump(self.metadata, sort_keys=False, allow_unicode=True).rstrip()
         return f"---\n{header}\n---\n{self.body}"
+
+
+class RepositorySnapshot(TypedDict):
+    design: str
+    implementation: str | None
 
 
 class DesignStore:
@@ -138,6 +143,97 @@ class DesignStore:
                 os.unlink(index_name)
 
     @staticmethod
+    def _diff_name_status(output: str) -> list[dict[str, Any]]:
+        tokens = output.split("\0")
+        if tokens and not tokens[-1]:
+            tokens.pop()
+        entries: list[dict[str, Any]] = []
+        index = 0
+        status_names = {
+            "A": "added",
+            "C": "copied",
+            "D": "deleted",
+            "M": "modified",
+            "R": "renamed",
+            "T": "type_changed",
+        }
+        while index < len(tokens):
+            code = tokens[index]
+            index += 1
+            kind = code[:1]
+            if kind not in status_names:
+                raise ValueError(f"Unsupported Git diff status: {code}")
+            if kind in {"C", "R"}:
+                if index + 1 >= len(tokens):
+                    raise ValueError("Malformed Git rename or copy status output")
+                previous_path, path = tokens[index : index + 2]
+                index += 2
+            else:
+                if index >= len(tokens):
+                    raise ValueError("Malformed Git name-status output")
+                previous_path = None
+                path = tokens[index]
+                index += 1
+            entry: dict[str, Any] = {"path": path, "status": status_names[kind]}
+            if previous_path is not None:
+                entry["previous_path"] = previous_path
+                entry["similarity_percent"] = int(code[1:])
+            entries.append(entry)
+        return entries
+
+    @staticmethod
+    def _diff_numstat(output: str) -> dict[tuple[str | None, str], dict[str, Any]]:
+        tokens = output.split("\0")
+        if tokens and not tokens[-1]:
+            tokens.pop()
+        entries: dict[tuple[str | None, str], dict[str, Any]] = {}
+        index = 0
+        while index < len(tokens):
+            raw = tokens[index]
+            index += 1
+            parts = raw.split("\t", 2)
+            if len(parts) != 3:
+                raise ValueError("Malformed Git numstat output")
+            added, deleted, path = parts
+            previous_path: str | None = None
+            if not path:
+                if index + 1 >= len(tokens):
+                    raise ValueError("Malformed Git rename or copy numstat output")
+                previous_path, path = tokens[index : index + 2]
+                index += 2
+            binary = added == "-" or deleted == "-"
+            entries[(previous_path, path)] = {
+                "insertions": None if binary else int(added),
+                "deletions": None if binary else int(deleted),
+                "binary": binary,
+            }
+        return entries
+
+    def diff_stats(self, repo: Path, before: str, after: str) -> dict[str, Any]:
+        arguments = ("--find-renames", before, after, "--")
+        statuses = self._diff_name_status(
+            self._git(repo, "diff", "--name-status", "-z", *arguments).stdout
+        )
+        numbers = self._diff_numstat(self._git(repo, "diff", "--numstat", "-z", *arguments).stdout)
+        files: list[dict[str, Any]] = []
+        for status in statuses:
+            key = (status.get("previous_path"), status["path"])
+            try:
+                stats = numbers.pop(key)
+            except KeyError as error:
+                raise ValueError(f"Git diff outputs disagree for {status['path']}") from error
+            files.append({**status, **stats})
+        if numbers:
+            raise ValueError("Git diff outputs contain different file sets")
+        return {
+            "files_changed": len(files),
+            "insertions": sum(item["insertions"] or 0 for item in files),
+            "deletions": sum(item["deletions"] or 0 for item in files),
+            "binary_files": sum(item["binary"] for item in files),
+            "files": files,
+        }
+
+    @staticmethod
     def parse_document(content: str) -> Document:
         if not content.startswith("---\n"):
             raise ValueError("YAML frontmatter not found")
@@ -198,11 +294,11 @@ class DesignStore:
         return design, self.validate_requirements_path(str(requirements))
 
     @staticmethod
-    def _snapshots(metadata: dict[str, Any]) -> dict[str, dict[str, str | None]]:
+    def _snapshots(metadata: dict[str, Any]) -> dict[str, RepositorySnapshot]:
         raw = metadata.get("repos")
         if not isinstance(raw, dict):
             return {}
-        snapshots: dict[str, dict[str, str | None]] = {}
+        snapshots: dict[str, RepositorySnapshot] = {}
         for repo, value in raw.items():
             if isinstance(value, str):
                 snapshots[str(repo)] = {"design": value, "implementation": None}
@@ -354,7 +450,7 @@ class DesignStore:
 
     def _pair_state(
         self, design_path: Path, requirements_path: Path
-    ) -> tuple[Document, Document, dict[str, dict[str, str | None]]]:
+    ) -> tuple[Document, Document, dict[str, RepositorySnapshot]]:
         design = self.read_document(design_path, "design document")
         requirements = self.read_document(requirements_path, "requirements document")
         if self._reference(design_path, design.metadata, "requirements") != requirements_path:
@@ -364,6 +460,13 @@ class DesignStore:
         snapshots = self._snapshots(design.metadata)
         if not snapshots or snapshots != self._snapshots(requirements.metadata):
             raise ValueError("Document pair has missing or different repository snapshots")
+        tree_pattern = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
+        for repo, snapshot in snapshots.items():
+            if not tree_pattern.fullmatch(snapshot["design"]):
+                raise ValueError(f"Repository snapshot has an invalid design tree: {repo}")
+            implementation = snapshot["implementation"]
+            if implementation is not None and not tree_pattern.fullmatch(implementation):
+                raise ValueError(f"Repository snapshot has an invalid implementation tree: {repo}")
         status = design.metadata.get("status")
         if status != requirements.metadata.get("status") or status not in {
             "active",
@@ -376,7 +479,7 @@ class DesignStore:
             raise ValueError("Design document must define delegated_review as true or false")
         implementations = [item["implementation"] is not None for item in snapshots.values()]
         if any(implementations) != all(implementations) or (
-            any(implementations) and status != "implemented"
+            (status == "implemented") != all(implementations)
         ):
             raise ValueError(
                 "Implementation snapshots must cover every repository and require "
@@ -434,24 +537,36 @@ class DesignStore:
         ):
             raise ValueError("Requirement indices are not current; call design.index")
         results: dict[str, Any] = {}
-        differences: list[str] = []
+        status = design.metadata["status"]
         for name, snapshot in snapshots.items():
             repo = self.resolve_repo_path(name, design_path.parent)
             current = self.generate_tree_sha(repo)
-            recorded = snapshot["implementation"] or snapshot["design"]
-            matches = current == recorded
-            results[str(repo)] = {**snapshot, "current": current, "matches": matches}
-            if not matches:
-                differences.append(str(repo))
+            implementation = snapshot["implementation"]
+            current_changes = (
+                self.diff_stats(repo, snapshot["design"], current) if status == "active" else None
+            )
+            implementation_changes = (
+                self.diff_stats(repo, snapshot["design"], implementation)
+                if status == "implemented" and implementation is not None
+                else None
+            )
+            results[str(repo)] = {
+                "design_tree": snapshot["design"],
+                "implementation_tree": implementation,
+                "current_tree": current,
+                "current_changes_from_design": current_changes,
+                "implementation_changes_from_design": implementation_changes,
+                "current_matches_implementation": current == implementation
+                if implementation is not None
+                else None,
+            }
         return {
-            "verified": True,
             "design_path": str(design_path),
             "requirements_path": str(requirements_path),
-            "status": design.metadata["status"],
+            "status": status,
             "delegated_review": design.metadata["delegated_review"],
             "requirement_count": len(headings),
             "repositories": results,
-            "snapshot_differences": differences,
         }
 
     def capture_implementation(self, design_file_path: str) -> dict[str, Any]:

@@ -24,13 +24,122 @@ def test_pair_lifecycle_tracks_dirty_working_tree_snapshots(tmp_path: Path) -> N
     verified = store.verify_design(built["design_path"])
 
     assert indexed == {**indexed, "requirement_count": 1, "changed": True}
-    assert verified["snapshot_differences"] == []
+    repository = verified["repositories"][str(repo)]
+    assert repository["current_changes_from_design"]["files_changed"] == 0
+    assert repository["implementation_changes_from_design"] is None
+    assert repository["current_matches_implementation"] is None
     (repo / "service.py").write_text("VERSION = 2\n", encoding="utf-8")
-    assert store.verify_design(built["design_path"])["snapshot_differences"] == [str(repo)]
+    active = store.verify_design(built["design_path"])["repositories"][str(repo)]
+    assert active["current_changes_from_design"] == {
+        "files_changed": 1,
+        "insertions": 1,
+        "deletions": 1,
+        "binary_files": 0,
+        "files": [
+            {
+                "path": "service.py",
+                "status": "modified",
+                "insertions": 1,
+                "deletions": 1,
+                "binary": False,
+            }
+        ],
+    }
 
     captured = store.capture_implementation(built["design_path"])
     assert captured["status"] == "implemented"
-    assert store.verify_design(built["design_path"])["snapshot_differences"] == []
+    implemented = store.verify_design(built["design_path"])["repositories"][str(repo)]
+    assert implemented["current_changes_from_design"] is None
+    assert (
+        implemented["implementation_changes_from_design"] == active["current_changes_from_design"]
+    )
+    assert implemented["current_matches_implementation"] is True
+
+    (repo / "service.py").write_text("VERSION = 3\n", encoding="utf-8")
+    drifted = store.verify_design(built["design_path"])["repositories"][str(repo)]
+    assert drifted["implementation_changes_from_design"] == active["current_changes_from_design"]
+    assert drifted["current_matches_implementation"] is False
+
+
+def test_verify_reports_renames_binary_files_additions_and_deletions(tmp_path: Path) -> None:
+    repo = tmp_path / "service"
+    git_init(repo)
+    (repo / "renamed.txt").write_text("same\n", encoding="utf-8")
+    (repo / "deleted.txt").write_text("delete me\n", encoding="utf-8")
+    (repo / "binary.bin").write_bytes(b"\x00\x01")
+    store = DesignStore(Settings(tmp_path / "plan"))
+    built = store.build_design(repos=[str(repo)], title="File changes")
+    store.index_design(built["design_path"])
+
+    (repo / "renamed.txt").rename(repo / "new-name.txt")
+    (repo / "deleted.txt").unlink()
+    (repo / "binary.bin").write_bytes(b"\x00\x02")
+    (repo / "added.txt").write_text("added\n", encoding="utf-8")
+
+    changes = store.verify_design(built["design_path"])["repositories"][str(repo)][
+        "current_changes_from_design"
+    ]
+    assert changes == {
+        "files_changed": 4,
+        "insertions": 1,
+        "deletions": 1,
+        "binary_files": 1,
+        "files": [
+            {
+                "path": "added.txt",
+                "status": "added",
+                "insertions": 1,
+                "deletions": 0,
+                "binary": False,
+            },
+            {
+                "path": "binary.bin",
+                "status": "modified",
+                "insertions": None,
+                "deletions": None,
+                "binary": True,
+            },
+            {
+                "path": "deleted.txt",
+                "status": "deleted",
+                "insertions": 0,
+                "deletions": 1,
+                "binary": False,
+            },
+            {
+                "path": "new-name.txt",
+                "status": "renamed",
+                "previous_path": "renamed.txt",
+                "similarity_percent": 100,
+                "insertions": 0,
+                "deletions": 0,
+                "binary": False,
+            },
+        ],
+    }
+
+
+@pytest.mark.parametrize("status", ["cancelled", "superseded"])
+def test_inactive_pair_does_not_attribute_current_changes(tmp_path: Path, status: str) -> None:
+    repo = tmp_path / "service"
+    git_init(repo)
+    (repo / "service.py").write_text("VERSION = 1\n", encoding="utf-8")
+    store = DesignStore(Settings(tmp_path / "plan"))
+    built = store.build_design(repos=[str(repo)], title="Inactive change")
+    store.index_design(built["design_path"])
+    design_path = Path(built["design_path"])
+    requirements_path = Path(built["requirements_path"])
+    for path in (design_path, requirements_path):
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("status: active", f"status: {status}"),
+            encoding="utf-8",
+        )
+    (repo / "service.py").write_text("VERSION = 2\n", encoding="utf-8")
+
+    repository = store.verify_design(str(design_path))["repositories"][str(repo)]
+    assert repository["current_changes_from_design"] is None
+    assert repository["implementation_changes_from_design"] is None
+    assert repository["current_matches_implementation"] is None
 
 
 def test_relation_state_is_enforced(tmp_path: Path) -> None:

@@ -58,6 +58,17 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
 
     assert indexed.structured_content["requirement_count"] == 1
     assert verified.is_error is False
-    assert verified.structured_content["verified"] is True
+    assert set(verified.structured_content) == {
+        "design_path",
+        "requirements_path",
+        "status",
+        "delegated_review",
+        "requirement_count",
+        "repositories",
+    }
+    repository = verified.structured_content["repositories"][str(repo)]
+    assert repository["current_changes_from_design"]["files_changed"] == 0
+    assert repository["implementation_changes_from_design"] is None
+    assert repository["current_matches_implementation"] is None
     assert set(recorded.structured_content) == {"memory_path", "pruned", "memory"}
     assert set(issue.structured_content) == {"issue_id", "memory_path", "pruned", "memory"}
