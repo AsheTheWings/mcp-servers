@@ -197,11 +197,10 @@ Git history, raw tool output, or conversation transcripts.
     def _stats(self, design: Path, entries: list[dict[str, Any]], exists: bool) -> dict[str, Any]:
         characters = len(self._render(design, entries)) if exists else 0
         issues = [entry for entry in entries if entry["kind"] == "Issue"]
+        percentage = characters * 100 / self.max_characters
         return {
             "exists": exists,
-            "characters": characters,
-            "max_characters": self.max_characters,
-            "remaining_characters": self.max_characters - characters,
+            "memory_size": f"{characters}/{self.max_characters} ({percentage:.1f}%)",
             "entries": len(entries),
             "decisions": sum(entry["kind"] == "Decision" for entry in entries),
             "issues": len(issues),
@@ -210,10 +209,10 @@ Git history, raw tool output, or conversation transcripts.
 
     def _mutate(
         self,
-        design_file_path: str,
+        design_doc: str,
         operation: Callable[[list[dict[str, Any]]], dict[str, Any]],
     ) -> dict[str, Any]:
-        design = self.designs.validate_design_path(design_file_path)
+        design = self.designs.validate_design_path(design_doc)
         path = self._path(design)
         with self._plan_lock():
             self._ensure_untracked(path)
@@ -235,9 +234,7 @@ Git history, raw tool output, or conversation transcripts.
                 "memory": {**self._stats(design, entries, True), "pruned_entries": len(pruned)},
             }
 
-    def record_decision(
-        self, design_file_path: str, decision: str, reasoning: str
-    ) -> dict[str, Any]:
+    def record_decision(self, design_doc: str, decision: str, reasoning: str) -> dict[str, Any]:
         normalized = self._text("decision", decision)
         rationale = self._text("reasoning", reasoning)
 
@@ -250,11 +247,11 @@ Git history, raw tool output, or conversation transcripts.
             entries.append(entry)
             return {}
 
-        return self._mutate(design_file_path, operation)
+        return self._mutate(design_doc, operation)
 
     def set_issue(
         self,
-        design_file_path: str,
+        design_doc: str,
         issue: str | None = None,
         issue_id: str | None = None,
         status: str | None = None,
@@ -273,7 +270,7 @@ Git history, raw tool output, or conversation transcripts.
                 entries.append(entry)
                 return {"issue_id": entry["id"]}
 
-            return self._mutate(design_file_path, create)
+            return self._mutate(design_doc, create)
 
         normalized_id = self._text("issue_id", issue_id)
         if issue is None and status is None and resolution is None:
@@ -296,28 +293,21 @@ Git history, raw tool output, or conversation transcripts.
                 return {"issue_id": changed["id"]}
             raise ValueError(f"issue not found: {normalized_id}")
 
-        return self._mutate(design_file_path, update)
+        return self._mutate(design_doc, update)
 
-    def list_open_issues(self, design_file_path: str) -> dict[str, Any]:
-        design = self.designs.validate_design_path(design_file_path)
+    def list_open_issues(self, design_doc: str) -> dict[str, Any]:
+        design = self.designs.validate_design_path(design_doc)
         path = self._path(design)
         self._ensure_untracked(path)
         exists = path.exists()
         entries = self._parse(design, path.read_text(encoding="utf-8")) if exists else []
         stats = self._stats(design, entries, exists)
-        characters = stats.pop("characters")
-        maximum = stats.pop("max_characters")
-        stats.pop("remaining_characters")
         return {
             "open_issues": [
                 {key: value for key, value in entry.items() if key != "kind"}
                 for entry in entries
                 if entry["kind"] == "Issue" and entry["status"] != "resolved"
             ],
-            "design_path": str(design),
             "memory_path": str(path),
-            "memory": {
-                "memory_size": f"{characters}/{maximum} ({characters * 100 / maximum:.1f}%)",
-                **stats,
-            },
+            "memory": stats,
         }

@@ -21,15 +21,15 @@ def make_memory(tmp_path: Path) -> tuple[MemoryStore, Path]:
 def test_mutation_responses_are_compact_and_issue_ids_are_stable(tmp_path: Path) -> None:
     memory, design = make_memory(tmp_path)
     recorded = memory.record_decision(
-        str(design),
+        design.name,
         decision="Use durable operation identities",
         reasoning="Retries must not duplicate output",
     )
-    created = memory.set_issue(str(design), issue="A retry can duplicate output")
+    created = memory.set_issue(design.name, issue="A retry can duplicate output")
     issue_id = created["issue_id"]
 
     updated = memory.set_issue(
-        str(design),
+        design.name,
         issue_id=issue_id,
         status="resolved",
         resolution="Persist the operation identity before retrying.",
@@ -42,7 +42,17 @@ def test_mutation_responses_are_compact_and_issue_ids_are_stable(tmp_path: Path)
     assert updated["memory"]["decisions"] == 1
     assert updated["memory"]["issues"] == 1
     assert updated["memory"]["open_issues"] == 0
-    assert memory.list_open_issues(str(design))["open_issues"] == []
+    assert set(updated["memory"]) == {
+        "exists",
+        "memory_size",
+        "entries",
+        "decisions",
+        "issues",
+        "open_issues",
+        "pruned_entries",
+    }
+    assert updated["memory"]["memory_size"].endswith("%)")
+    assert memory.list_open_issues(design.name)["open_issues"] == []
 
 
 def test_refuses_to_overwrite_unowned_memory(tmp_path: Path) -> None:
@@ -52,4 +62,4 @@ def test_refuses_to_overwrite_unowned_memory(tmp_path: Path) -> None:
     mapped.write_text("personal notes\n", encoding="utf-8")
 
     with pytest.raises(MemoryFormatError, match="refusing to overwrite"):
-        memory.list_open_issues(str(design))
+        memory.list_open_issues(design.name)

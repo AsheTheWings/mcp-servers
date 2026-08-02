@@ -34,16 +34,16 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         }
         assert tools["verify"].annotations.read_only_hint is True
         built = await client.call_tool("build", {"repos": [str(repo)], "title": "Protocol test"})
-        indexed = await client.call_tool(
-            "index", {"design_file_path": built.structured_content["design_path"]}
-        )
-        verified = await client.call_tool(
-            "verify", {"design_file_path": built.structured_content["design_path"]}
-        )
+        assert "design_path" not in built.structured_content
+        design_filename = built.structured_content["design_filename"]
+        indexed = await client.call_tool("index", {"design_filename": design_filename})
+        verified = await client.call_tool("verify", {"design_filename": design_filename})
+        assert "design_path" not in indexed.structured_content
+        assert "design_path" not in verified.structured_content
         recorded = await client.call_tool(
             "memory_record_decision",
             {
-                "design_file_path": built.structured_content["design_path"],
+                "design_filename": design_filename,
                 "decision": "Use durable operation identities",
                 "reasoning": "Retries must not duplicate output",
             },
@@ -51,15 +51,21 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         issue = await client.call_tool(
             "memory_set_issue",
             {
-                "design_file_path": built.structured_content["design_path"],
+                "design_filename": design_filename,
                 "issue": "A retry can duplicate output",
             },
         )
+        open_issues = await client.call_tool(
+            "memory_list_open_issues", {"design_filename": design_filename}
+        )
+
+        assert tools["index"].input_schema["properties"]["design_filename"]["description"]
+        assert tools["verify"].input_schema["properties"]["design_filename"]["description"]
 
     assert indexed.structured_content["requirement_count"] == 1
     assert verified.is_error is False
     assert set(verified.structured_content) == {
-        "design_path",
+        "design_filename",
         "requirements_path",
         "status",
         "delegated_review",
@@ -72,3 +78,5 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
     assert repository["current_matches_implementation"] is None
     assert set(recorded.structured_content) == {"memory_path", "pruned", "memory"}
     assert set(issue.structured_content) == {"issue_id", "memory_path", "pruned", "memory"}
+    assert "design_path" not in open_issues.structured_content
+    assert "memory_path" in open_issues.structured_content

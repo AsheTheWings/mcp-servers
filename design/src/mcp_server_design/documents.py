@@ -285,8 +285,8 @@ class DesignStore:
         value = metadata.get(key)
         return (owner.parent / value).resolve() if isinstance(value, str) and value else None
 
-    def resolve_pair(self, design_file_path: str) -> tuple[Path, Path]:
-        design = self.validate_design_path(design_file_path)
+    def resolve_pair(self, design_doc: str) -> tuple[Path, Path]:
+        design = self.validate_design_path(design_doc)
         document = self.read_document(design, "design document")
         requirements = self._reference(design, document.metadata, "requirements")
         if requirements is None:
@@ -419,14 +419,14 @@ class DesignStore:
             design_path.unlink(missing_ok=True)
             raise
         return {
-            "design_path": str(design_path),
+            "design_filename": design_path.name,
             "requirements_path": str(requirements_path),
             "status": "active",
             "delegated_review": delegated_review,
             "repositories": snapshots,
             "domains": target_domains,
             "features": target_features,
-            "relation": {"kind": relation, "design_path": str(related[0])}
+            "relation": {"kind": relation, "design_filename": related[0].name}
             if relation and related
             else None,
         }
@@ -506,8 +506,8 @@ class DesignStore:
                     raise ValueError("An extends link must reference an implemented design")
         return design, requirements, snapshots
 
-    def index_design(self, design_file_path: str) -> dict[str, Any]:
-        design_path, requirements_path = self.resolve_pair(design_file_path)
+    def index_design(self, design_doc: str) -> dict[str, Any]:
+        design_path, requirements_path = self.resolve_pair(design_doc)
         document = self.read_document(requirements_path, "requirements document")
         headings = self._requirement_headings(document.body)
         if not headings:
@@ -522,14 +522,14 @@ class DesignStore:
             document.body = "".join(lines)
             self._atomic_write(requirements_path, document.render())
         return {
-            "design_path": str(design_path),
+            "design_filename": design_path.name,
             "requirements_path": str(requirements_path),
             "requirement_count": len(headings),
             "changed": changed,
         }
 
-    def verify_design(self, design_file_path: str) -> dict[str, Any]:
-        design_path, requirements_path = self.resolve_pair(design_file_path)
+    def verify_design(self, design_doc: str) -> dict[str, Any]:
+        design_path, requirements_path = self.resolve_pair(design_doc)
         design, requirements, snapshots = self._pair_state(design_path, requirements_path)
         headings = self._requirement_headings(requirements.body)
         if not headings or any(
@@ -561,7 +561,7 @@ class DesignStore:
                 else None,
             }
         return {
-            "design_path": str(design_path),
+            "design_filename": design_path.name,
             "requirements_path": str(requirements_path),
             "status": status,
             "delegated_review": design.metadata["delegated_review"],
@@ -569,8 +569,8 @@ class DesignStore:
             "repositories": results,
         }
 
-    def capture_implementation(self, design_file_path: str) -> dict[str, Any]:
-        design_path, requirements_path = self.resolve_pair(design_file_path)
+    def capture_implementation(self, design_doc: str) -> dict[str, Any]:
+        design_path, requirements_path = self.resolve_pair(design_doc)
         design, requirements, snapshots = self._pair_state(design_path, requirements_path)
         if design.metadata["status"] in {"superseded", "cancelled"}:
             raise ValueError(f"Cannot implement a {design.metadata['status']} design")
@@ -588,7 +588,7 @@ class DesignStore:
             self._atomic_write(design_path, original)
             raise
         return {
-            "design_path": str(design_path),
+            "design_filename": design_path.name,
             "requirements_path": str(requirements_path),
             "status": "implemented",
             "repositories": snapshots,

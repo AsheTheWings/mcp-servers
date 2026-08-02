@@ -3,13 +3,24 @@
 from __future__ import annotations
 
 from threading import RLock
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from .documents import DesignStore, Settings
 from .memory import MemoryStore
+
+DesignFilename = Annotated[
+    str,
+    Field(
+        description=(
+            "Generated design filename, such as design-20260801-1.md. "
+            "Use the filename instead of a full path when possible; full paths are also accepted."
+        )
+    ),
+]
 
 
 def create_server(
@@ -55,20 +66,20 @@ def create_server(
             open_world_hint=False,
         )
     )
-    def index(design_file_path: str) -> dict[str, Any]:
+    def index(design_filename: DesignFilename) -> dict[str, Any]:
         """Assign current sequential R* indices to substantive H3 requirements."""
         with lock:
-            return active_designs.index_design(design_file_path)
+            return active_designs.index_design(design_filename)
 
     @server.tool(
         annotations=ToolAnnotations(
             read_only_hint=True, idempotent_hint=True, open_world_hint=False
         )
     )
-    def verify(design_file_path: str) -> dict[str, Any]:
+    def verify(design_filename: DesignFilename) -> dict[str, Any]:
         """Verify pair structure and report lifecycle-specific repository changes."""
         with lock:
-            return active_designs.verify_design(design_file_path)
+            return active_designs.verify_design(design_filename)
 
     @server.tool(
         annotations=ToolAnnotations(
@@ -78,10 +89,10 @@ def create_server(
             open_world_hint=False,
         )
     )
-    def capture_implementation(design_file_path: str) -> dict[str, Any]:
+    def capture_implementation(design_filename: DesignFilename) -> dict[str, Any]:
         """Capture current repository trees and mark the linked pair implemented."""
         with lock:
-            return active_designs.capture_implementation(design_file_path)
+            return active_designs.capture_implementation(design_filename)
 
     @server.tool(
         annotations=ToolAnnotations(
@@ -89,11 +100,11 @@ def create_server(
         )
     )
     def memory_record_decision(
-        design_file_path: str, decision: str, reasoning: str
+        design_filename: DesignFilename, decision: str, reasoning: str
     ) -> dict[str, Any]:
         """Record one consequential implementation decision and its rationale."""
         with lock:
-            return active_memories.record_decision(design_file_path, decision, reasoning)
+            return active_memories.record_decision(design_filename, decision, reasoning)
 
     @server.tool(
         annotations=ToolAnnotations(
@@ -101,7 +112,7 @@ def create_server(
         )
     )
     def memory_set_issue(
-        design_file_path: str,
+        design_filename: DesignFilename,
         issue: str | None = None,
         issue_id: str | None = None,
         status: Literal["open", "blocked", "resolved"] | None = None,
@@ -109,17 +120,17 @@ def create_server(
     ) -> dict[str, Any]:
         """Create or update an implementation issue in the design-scoped journal."""
         with lock:
-            return active_memories.set_issue(design_file_path, issue, issue_id, status, resolution)
+            return active_memories.set_issue(design_filename, issue, issue_id, status, resolution)
 
     @server.tool(
         annotations=ToolAnnotations(
             read_only_hint=True, idempotent_hint=True, open_world_hint=False
         )
     )
-    def memory_list_open_issues(design_file_path: str) -> dict[str, Any]:
+    def memory_list_open_issues(design_filename: DesignFilename) -> dict[str, Any]:
         """List unresolved issues and return bounded-memory statistics."""
         with lock:
-            return active_memories.list_open_issues(design_file_path)
+            return active_memories.list_open_issues(design_filename)
 
     return server
 
