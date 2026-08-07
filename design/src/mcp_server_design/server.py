@@ -11,6 +11,7 @@ from pydantic import Field
 
 from .documents import DesignStore, Settings
 from .memory import MemoryStore
+from .reviews import ReviewStore
 
 DesignFilename = Annotated[
     str,
@@ -26,15 +27,20 @@ DesignFilename = Annotated[
 def create_server(
     designs: DesignStore | None = None,
     memories: MemoryStore | None = None,
+    reviews: ReviewStore | None = None,
 ) -> MCPServer:
     """Build an isolated server instance for production or component tests."""
     active_designs = designs or DesignStore(Settings.from_environment())
     active_memories = memories or MemoryStore(active_designs)
+    active_reviews = reviews or ReviewStore(active_designs)
     lock = RLock()
     server = MCPServer(
         "design",
         version="1.0.0",
-        instructions="Manage linked design/requirements pairs and their implementation journal.",
+        instructions=(
+            "Manage linked design/requirements pairs, their implementation journal, "
+            "and review reports."
+        ),
     )
 
     @server.tool(
@@ -131,6 +137,23 @@ def create_server(
         """List unresolved issues and memory statistics; active designs only."""
         with lock:
             return active_memories.list_open_issues(design_filename)
+
+    @server.tool(
+        annotations=ToolAnnotations(
+            read_only_hint=False, destructive_hint=False, open_world_hint=False
+        )
+    )
+    def write_review(
+        design_filename: DesignFilename,
+        content: Annotated[
+            str,
+            Field(description="Full markdown review report to persist."),
+        ],
+        reviewer: str | None = None,
+    ) -> dict[str, Any]:
+        """Persist a review report as plan/reviews/<design>-<increment>.md and return its path."""
+        with lock:
+            return active_reviews.write_review(design_filename, content, reviewer)
 
     return server
 

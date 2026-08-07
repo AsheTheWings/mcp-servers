@@ -2,8 +2,8 @@
 
 This repository contains independently installable local Model Context Protocol servers.
 
-- `design` manages linked design and requirements documents, implementation snapshots, and
-  design-scoped memory over stdio.
+- `design` manages linked design and requirements documents, implementation snapshots,
+  design-scoped memory, and persisted review reports over stdio.
 
 ## Setup and verification
 

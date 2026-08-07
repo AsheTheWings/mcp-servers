@@ -37,6 +37,10 @@ class Settings:
     def memory_dir(self) -> Path:
         return self.plan_dir / "memory"
 
+    @property
+    def reviews_dir(self) -> Path:
+        return self.plan_dir / "reviews"
+
 
 @dataclass
 class Document:
