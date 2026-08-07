@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from mcp import Client
+from mcp.types import TextContent
 from mcp_server_design.documents import DesignStore, Settings
 from mcp_server_design.memory import MemoryStore
 from mcp_server_design.server import create_server
@@ -58,6 +59,20 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         open_issues = await client.call_tool(
             "memory_list_open_issues", {"design_filename": design_filename}
         )
+        captured = await client.call_tool(
+            "capture_implementation", {"design_filename": design_filename}
+        )
+        inactive_decision = await client.call_tool(
+            "memory_record_decision",
+            {
+                "design_filename": design_filename,
+                "decision": "Late decision",
+                "reasoning": "Arrived after implementation",
+            },
+        )
+        inactive_issues = await client.call_tool(
+            "memory_list_open_issues", {"design_filename": design_filename}
+        )
 
         assert tools["index"].input_schema["properties"]["design_filename"]["description"]
         assert tools["verify"].input_schema["properties"]["design_filename"]["description"]
@@ -80,3 +95,14 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
     assert set(issue.structured_content) == {"issue_id", "memory_path", "pruned", "memory"}
     assert "design_path" not in open_issues.structured_content
     assert "memory_path" in open_issues.structured_content
+    assert captured.structured_content["status"] == "implemented"
+    memory_errors = "".join(
+        content.text
+        for result in (inactive_decision, inactive_issues)
+        if result.is_error
+        for content in result.content
+        if isinstance(content, TextContent)
+    )
+    assert inactive_decision.is_error is True
+    assert inactive_issues.is_error is True
+    assert "status is 'active'" in memory_errors

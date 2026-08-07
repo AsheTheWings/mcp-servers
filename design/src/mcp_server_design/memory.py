@@ -105,6 +105,16 @@ Git history, raw tool output, or conversation transcripts.
             raise ValueError(f"Design memory path must be a regular file: {path}")
         return path
 
+    def _require_active(self, design_path: Path) -> None:
+        document = self.designs.read_document(design_path, "design document")
+        status = document.metadata.get("status")
+        if status != "active":
+            current = status if isinstance(status, str) and status else "missing"
+            raise ValueError(
+                f"Design memory is available only while {design_path.name} status is 'active' "
+                f"(current: {current})"
+            )
+
     def _ensure_untracked(self, path: Path) -> None:
         self._require_plan_repo()
         relative = path.relative_to(self.designs.settings.plan_dir)
@@ -213,6 +223,7 @@ Git history, raw tool output, or conversation transcripts.
         operation: Callable[[list[dict[str, Any]]], dict[str, Any]],
     ) -> dict[str, Any]:
         design = self.designs.validate_design_path(design_doc)
+        self._require_active(design)
         path = self._path(design)
         with self._plan_lock():
             self._ensure_untracked(path)
@@ -297,6 +308,7 @@ Git history, raw tool output, or conversation transcripts.
 
     def list_open_issues(self, design_doc: str) -> dict[str, Any]:
         design = self.designs.validate_design_path(design_doc)
+        self._require_active(design)
         path = self._path(design)
         self._ensure_untracked(path)
         exists = path.exists()

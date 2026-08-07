@@ -102,7 +102,7 @@ def create_server(
     def memory_record_decision(
         design_filename: DesignFilename, decision: str, reasoning: str
     ) -> dict[str, Any]:
-        """Record one consequential implementation decision and its rationale."""
+        """Record one consequential implementation decision; active designs only."""
         with lock:
             return active_memories.record_decision(design_filename, decision, reasoning)
 
@@ -118,7 +118,7 @@ def create_server(
         status: Literal["open", "blocked", "resolved"] | None = None,
         resolution: str | None = None,
     ) -> dict[str, Any]:
-        """Create or update an implementation issue in the design-scoped journal."""
+        """Create or update an implementation issue in the journal; active designs only."""
         with lock:
             return active_memories.set_issue(design_filename, issue, issue_id, status, resolution)
 
@@ -128,7 +128,7 @@ def create_server(
         )
     )
     def memory_list_open_issues(design_filename: DesignFilename) -> dict[str, Any]:
-        """List unresolved issues and return bounded-memory statistics."""
+        """List unresolved issues and memory statistics; active designs only."""
         with lock:
             return active_memories.list_open_issues(design_filename)
 
