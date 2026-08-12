@@ -1,4 +1,4 @@
-"""Paired design and requirements document lifecycle operations."""
+"""Design document scaffolding and paired lifecycle operations."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class RepositorySnapshot(TypedDict):
 
 
 class DesignStore:
-    """Owns paired document validation, mutation, and repository snapshots."""
+    """Owns document scaffolding, paired validation, mutation, and repository snapshots."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -315,15 +315,27 @@ class DesignStore:
                 }
         return snapshots
 
-    def _next_path(self, directory: Path, prefix: str) -> Path:
-        directory.mkdir(parents=True, exist_ok=True)
+    def _next_document_paths(self, include_requirements: bool) -> tuple[Path, Path | None]:
+        self.settings.design_dir.mkdir(parents=True, exist_ok=True)
         today = datetime.now().strftime("%Y%m%d")
-        numbers = [
-            int(match.group(1))
-            for path in directory.glob(f"{prefix}-{today}-*.md")
-            if (match := re.fullmatch(rf"{prefix}-{today}-(\d+)\.md", path.name))
-        ]
-        return directory / f"{prefix}-{today}-{max(numbers, default=0) + 1}.md"
+        numbers: list[int] = []
+        for directory, prefix in (
+            (self.settings.design_dir, "design"),
+            (self.settings.requirements_dir, "requirements"),
+        ):
+            numbers.extend(
+                int(match.group(1))
+                for path in directory.glob(f"{prefix}-{today}-*.md")
+                if (match := re.fullmatch(rf"{prefix}-{today}-(\d+)\.md", path.name))
+            )
+        number = max(numbers, default=0) + 1
+        design_path = self.settings.design_dir / f"design-{today}-{number}.md"
+        requirements_path = (
+            self.settings.requirements_dir / f"requirements-{today}-{number}.md"
+            if include_requirements
+            else None
+        )
+        return design_path, requirements_path
 
     def _related(self, value: str | None, relation: str) -> tuple[Path, Path, Document] | None:
         if value is None:
@@ -350,12 +362,15 @@ class DesignStore:
         delegated_review: bool = False,
         supersede: str | None = None,
         extend: str | None = None,
+        include_requirements: bool = True,
     ) -> dict[str, Any]:
         requested_repos = self._string_list("repos", repos)
         target_domains = self._string_list("domains", domains)
         target_features = self._string_list("features", features)
         if not isinstance(delegated_review, bool):
             raise ValueError("delegated_review must be a boolean")
+        if not isinstance(include_requirements, bool):
+            raise ValueError("include_requirements must be a boolean")
         if supersede and extend:
             raise ValueError("supersede and extend are mutually exclusive")
         relation = "supersedes" if supersede else "extends" if extend else None
@@ -386,45 +401,51 @@ class DesignStore:
             if isinstance(description, str) and description.strip()
             else f"Design for {subject}."
         )
-        design_path = self._next_path(self.settings.design_dir, "design")
-        requirements_path = self._next_path(self.settings.requirements_dir, "requirements")
+        design_path, requirements_path = self._next_document_paths(include_requirements)
         design_metadata: dict[str, Any] = {
             "title": design_title,
             "description": design_description,
             "status": "active",
             "delegated_review": delegated_review,
-            "requirements": os.path.relpath(requirements_path, design_path.parent),
             "repos": snapshots,
             "domains": target_domains,
             "features": target_features,
         }
-        requirements_metadata: dict[str, Any] = {
-            "title": f"{design_title} Requirements",
-            "description": f"Canonical implementation requirements for {subject}.",
-            "status": "active",
-            "design": os.path.relpath(design_path, requirements_path.parent),
-            "repos": snapshots,
-            "domains": target_domains,
-            "features": target_features,
-        }
+        requirements_metadata: dict[str, Any] | None = None
+        if requirements_path is not None:
+            design_metadata["requirements"] = os.path.relpath(requirements_path, design_path.parent)
+            requirements_metadata = {
+                "title": f"{design_title} Requirements",
+                "description": f"Canonical implementation requirements for {subject}.",
+                "status": "active",
+                "design": os.path.relpath(design_path, requirements_path.parent),
+                "repos": snapshots,
+                "domains": target_domains,
+                "features": target_features,
+            }
         if relation and related:
             design_metadata[relation] = os.path.relpath(related[0], design_path.parent)
-            requirements_metadata[relation] = os.path.relpath(related[1], requirements_path.parent)
+            if requirements_path is not None and requirements_metadata is not None:
+                requirements_metadata[relation] = os.path.relpath(
+                    related[1], requirements_path.parent
+                )
         design = Document(design_metadata, f"# {design_title}\n\n## Design\n\nTBD.\n")
-        requirements_body = f"# {design_title} Requirements\n\n" + "".join(
-            f"## {repo}\n\n### Requirement\n\nTBD.\n\n" for repo in repositories
-        )
         self._atomic_write(design_path, design.render())
-        try:
-            self._atomic_write(
-                requirements_path, Document(requirements_metadata, requirements_body).render()
+        if requirements_path is not None and requirements_metadata is not None:
+            requirements_body = f"# {design_title} Requirements\n\n" + "".join(
+                f"## {repo}\n\n### Requirement\n\nTBD.\n\n" for repo in repositories
             )
-        except Exception:
-            design_path.unlink(missing_ok=True)
-            raise
+            try:
+                self._atomic_write(
+                    requirements_path, Document(requirements_metadata, requirements_body).render()
+                )
+            except Exception:
+                design_path.unlink(missing_ok=True)
+                raise
         return {
             "design_filename": design_path.name,
-            "requirements_path": str(requirements_path),
+            "requirements_path": str(requirements_path) if requirements_path is not None else None,
+            "requirements_created": requirements_path is not None,
             "status": "active",
             "delegated_review": delegated_review,
             "repositories": snapshots,

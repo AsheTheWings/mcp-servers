@@ -38,8 +38,8 @@ def create_server(
         "design",
         version="1.0.0",
         instructions=(
-            "Manage linked design/requirements pairs, their implementation journal, "
-            "and review reports."
+            "Scaffold standalone designs or linked design/requirements pairs, and manage "
+            "paired implementation journals and review reports."
         ),
     )
 
@@ -55,13 +55,30 @@ def create_server(
         features: list[str] | None = None,
         description: str | None = None,
         delegated_review: bool = False,
+        include_requirements: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Create a linked requirements document when true; scaffold only the design "
+                    "document when false."
+                )
+            ),
+        ] = True,
         supersede: str | None = None,
         extend: str | None = None,
     ) -> dict[str, Any]:
-        """Initialize a linked design/requirements pair and snapshot target repositories."""
+        """Initialize a design, optionally with linked requirements, and snapshot repositories."""
         with lock:
             return active_designs.build_design(
-                repos, title, domains, features, description, delegated_review, supersede, extend
+                repos=repos,
+                title=title,
+                domains=domains,
+                features=features,
+                description=description,
+                delegated_review=delegated_review,
+                supersede=supersede,
+                extend=extend,
+                include_requirements=include_requirements,
             )
 
     @server.tool(

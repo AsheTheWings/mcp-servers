@@ -35,6 +35,30 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
             "write_review",
         }
         assert tools["verify"].annotations.read_only_hint is True
+        assert tools["build"].input_schema["properties"]["include_requirements"] == {
+            "default": True,
+            "description": (
+                "Create a linked requirements document when true; scaffold only the design "
+                "document when false."
+            ),
+            "title": "Include Requirements",
+            "type": "boolean",
+        }
+        standalone = await client.call_tool(
+            "build",
+            {
+                "repos": [str(repo)],
+                "title": "Standalone protocol test",
+                "include_requirements": False,
+            },
+        )
+        assert standalone.is_error is False
+        assert standalone.structured_content["requirements_created"] is False
+        assert standalone.structured_content["requirements_path"] is None
+        standalone_path = plan / "design" / standalone.structured_content["design_filename"]
+        assert (
+            "requirements" not in designs.read_document(standalone_path, "design document").metadata
+        )
         built = await client.call_tool("build", {"repos": [str(repo)], "title": "Protocol test"})
         assert "design_path" not in built.structured_content
         design_filename = built.structured_content["design_filename"]

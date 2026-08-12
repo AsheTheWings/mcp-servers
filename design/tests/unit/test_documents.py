@@ -64,6 +64,40 @@ def test_pair_lifecycle_tracks_dirty_working_tree_snapshots(tmp_path: Path) -> N
     assert drifted["current_matches_implementation"] is False
 
 
+def test_build_can_scaffold_a_standalone_design(tmp_path: Path) -> None:
+    plan = tmp_path / "plan"
+    repo = tmp_path / "service"
+    git_init(repo)
+    (repo / "service.py").write_text("VERSION = 1\n", encoding="utf-8")
+    store = DesignStore(Settings(plan))
+
+    standalone = store.build_design(
+        repos=[str(repo)],
+        title="Standalone architecture",
+        domains=["runtime"],
+        features=["Design-only planning"],
+        include_requirements=False,
+    )
+
+    design_path = plan / "design" / standalone["design_filename"]
+    document = store.read_document(design_path, "design document")
+    assert standalone["requirements_created"] is False
+    assert standalone["requirements_path"] is None
+    assert "requirements" not in document.metadata
+    assert document.metadata["status"] == "active"
+    assert document.metadata["repos"] == standalone["repositories"]
+    assert document.body == "# Standalone architecture\n\n## Design\n\nTBD.\n"
+    assert not plan.joinpath("requirements").exists()
+
+    paired = store.build_design(repos=[str(repo)], title="Paired architecture")
+    assert paired["requirements_created"] is True
+    requirements_path = Path(paired["requirements_path"])
+    assert requirements_path.name == paired["design_filename"].replace(
+        "design-", "requirements-", 1
+    )
+    assert requirements_path.is_file()
+
+
 def test_verify_reports_renames_binary_files_additions_and_deletions(tmp_path: Path) -> None:
     repo = tmp_path / "service"
     git_init(repo)
