@@ -100,7 +100,7 @@ def create_server(
         )
     )
     def verify(design_filename: DesignFilename) -> dict[str, Any]:
-        """Verify pair structure and report lifecycle-specific repository changes."""
+        """Verify a standalone design or linked pair and report repository changes."""
         with lock:
             return active_designs.verify_design(design_filename)
 

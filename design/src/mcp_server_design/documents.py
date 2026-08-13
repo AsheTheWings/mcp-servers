@@ -473,18 +473,13 @@ class DesignStore:
                 )
         return headings
 
-    def _pair_state(
-        self, design_path: Path, requirements_path: Path
-    ) -> tuple[Document, Document, dict[str, RepositorySnapshot]]:
-        design = self.read_document(design_path, "design document")
-        requirements = self.read_document(requirements_path, "requirements document")
-        if self._reference(design_path, design.metadata, "requirements") != requirements_path:
-            raise ValueError("Design document does not link to the requirements document")
-        if self._reference(requirements_path, requirements.metadata, "design") != design_path:
-            raise ValueError("Requirements document does not link back to the design document")
-        snapshots = self._snapshots(design.metadata)
-        if not snapshots or snapshots != self._snapshots(requirements.metadata):
-            raise ValueError("Document pair has missing or different repository snapshots")
+    def _design_state(
+        self, design_path: Path, design: Document | None = None
+    ) -> tuple[Document, dict[str, RepositorySnapshot]]:
+        document = design or self.read_document(design_path, "design document")
+        snapshots = self._snapshots(document.metadata)
+        if not snapshots:
+            raise ValueError("Design document has no repository snapshots")
         tree_pattern = re.compile(r"(?:[0-9a-f]{40}|[0-9a-f]{64})")
         for repo, snapshot in snapshots.items():
             if not tree_pattern.fullmatch(snapshot["design"]):
@@ -492,15 +487,10 @@ class DesignStore:
             implementation = snapshot["implementation"]
             if implementation is not None and not tree_pattern.fullmatch(implementation):
                 raise ValueError(f"Repository snapshot has an invalid implementation tree: {repo}")
-        status = design.metadata.get("status")
-        if status != requirements.metadata.get("status") or status not in {
-            "active",
-            "implemented",
-            "superseded",
-            "cancelled",
-        }:
-            raise ValueError("Document pair has different or unsupported statuses")
-        if not isinstance(design.metadata.get("delegated_review"), bool):
+        status = document.metadata.get("status")
+        if status not in {"active", "implemented", "superseded", "cancelled"}:
+            raise ValueError("Design document has an unsupported status")
+        if not isinstance(document.metadata.get("delegated_review"), bool):
             raise ValueError("Design document must define delegated_review as true or false")
         implementations = [item["implementation"] is not None for item in snapshots.values()]
         if any(implementations) != all(implementations) or (
@@ -510,8 +500,33 @@ class DesignStore:
                 "Implementation snapshots must cover every repository and require "
                 "implemented status"
             )
-        if f"# {design.metadata.get('title')}" not in design.body:
+        if f"# {document.metadata.get('title')}" not in document.body:
             raise ValueError("Design document H1 does not match its title")
+        for relation in ("extends", "supersedes"):
+            link = self._reference(design_path, document.metadata, relation)
+            if not link:
+                continue
+            related_path = self.validate_design_path(str(link))
+            related = self.read_document(related_path, f"{relation} design document")
+            if relation == "extends" and related.metadata.get("status") != "implemented":
+                raise ValueError("An extends link must reference an implemented design")
+        return document, snapshots
+
+    def _pair_state(
+        self, design_path: Path, requirements_path: Path
+    ) -> tuple[Document, Document, dict[str, RepositorySnapshot]]:
+        design = self.read_document(design_path, "design document")
+        requirements = self.read_document(requirements_path, "requirements document")
+        if self._reference(design_path, design.metadata, "requirements") != requirements_path:
+            raise ValueError("Design document does not link to the requirements document")
+        if self._reference(requirements_path, requirements.metadata, "design") != design_path:
+            raise ValueError("Requirements document does not link back to the design document")
+        design, snapshots = self._design_state(design_path, design)
+        if snapshots != self._snapshots(requirements.metadata):
+            raise ValueError("Document pair has missing or different repository snapshots")
+        status = design.metadata.get("status")
+        if status != requirements.metadata.get("status"):
+            raise ValueError("Document pair has different or unsupported statuses")
         if f"# {requirements.metadata.get('title')}" not in requirements.body:
             raise ValueError("Requirements document H1 does not match its title")
         for repo in snapshots:
@@ -554,13 +569,26 @@ class DesignStore:
         }
 
     def verify_design(self, design_doc: str) -> dict[str, Any]:
-        design_path, requirements_path = self.resolve_pair(design_doc)
-        design, requirements, snapshots = self._pair_state(design_path, requirements_path)
-        headings = self._requirement_headings(requirements.body)
-        if not headings or any(
-            found != expected for expected, (_, found, _) in enumerate(headings, 1)
-        ):
-            raise ValueError("Requirement indices are not current; call design.index")
+        design_path = self.validate_design_path(design_doc)
+        candidate = self.read_document(design_path, "design document")
+        requirements_path: Path | None = None
+        requirement_count: int | None = None
+        if "requirements" in candidate.metadata:
+            requirements = self._reference(design_path, candidate.metadata, "requirements")
+            if requirements is None:
+                raise ValueError("Design document has an invalid requirements reference")
+            requirements_path = self.validate_requirements_path(str(requirements))
+            design, requirements_document, snapshots = self._pair_state(
+                design_path, requirements_path
+            )
+            headings = self._requirement_headings(requirements_document.body)
+            if not headings or any(
+                found != expected for expected, (_, found, _) in enumerate(headings, 1)
+            ):
+                raise ValueError("Requirement indices are not current; call design.index")
+            requirement_count = len(headings)
+        else:
+            design, snapshots = self._design_state(design_path, candidate)
         results: dict[str, Any] = {}
         status = design.metadata["status"]
         for name, snapshot in snapshots.items():
@@ -587,10 +615,10 @@ class DesignStore:
             }
         return {
             "design_filename": design_path.name,
-            "requirements_path": str(requirements_path),
+            "requirements_path": str(requirements_path) if requirements_path else None,
             "status": status,
             "delegated_review": design.metadata["delegated_review"],
-            "requirement_count": len(headings),
+            "requirement_count": requirement_count,
             "repositories": results,
         }
 

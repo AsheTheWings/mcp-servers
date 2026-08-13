@@ -59,6 +59,12 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         assert (
             "requirements" not in designs.read_document(standalone_path, "design document").metadata
         )
+        standalone_verified = await client.call_tool(
+            "verify", {"design_filename": standalone.structured_content["design_filename"]}
+        )
+        assert standalone_verified.is_error is False
+        assert standalone_verified.structured_content["requirements_path"] is None
+        assert standalone_verified.structured_content["requirement_count"] is None
         built = await client.call_tool("build", {"repos": [str(repo)], "title": "Protocol test"})
         assert "design_path" not in built.structured_content
         design_filename = built.structured_content["design_filename"]

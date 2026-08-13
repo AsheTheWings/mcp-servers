@@ -88,6 +88,17 @@ def test_build_can_scaffold_a_standalone_design(tmp_path: Path) -> None:
     assert document.metadata["repos"] == standalone["repositories"]
     assert document.body == "# Standalone architecture\n\n## Design\n\nTBD.\n"
     assert not plan.joinpath("requirements").exists()
+    verified = store.verify_design(standalone["design_filename"])
+    assert verified["requirements_path"] is None
+    assert verified["requirement_count"] is None
+    assert verified["status"] == "active"
+    assert verified["repositories"][str(repo)]["current_changes_from_design"] == {
+        "files_changed": 0,
+        "insertions": 0,
+        "deletions": 0,
+        "binary_files": 0,
+        "files": [],
+    }
 
     paired = store.build_design(repos=[str(repo)], title="Paired architecture")
     assert paired["requirements_created"] is True
