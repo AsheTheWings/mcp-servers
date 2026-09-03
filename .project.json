@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "project": "mcp-servers",
+  "repository": "AsheTheWings/mcp-servers",
+  "primaryBranch": "main",
+  "primaryCheckout": "mcp-servers",
+  "changeDelivery": {
+    "mode": "direct"
+  },
+  "directives": {
+    "source": "AsheTheWings/agentic-development-control",
+    "bundles": {
+      "canonical": {
+        "sourceCommit": "69bea7d60efb4308875e0728e59c0e7ce1e550cc",
+        "bundleSha256": "9b393849eaec5fce7718725ad9ac35f9126f75e37b1b6e45ed1db57f98ecf9cb",
+        "files": {
+          "rules/change-delivery.md": {
+            "sourcePath": "project-rules/change-delivery.md",
+            "revision": "project-change-delivery/v4",
+            "sha256": "169bd7f3b05baf50665ff0f8490840e5d0953222298e13bb17a38e1b98b617ea"
+          },
+          "rules/docs.md": {
+            "sourcePath": "project-rules/docs.md",
+            "revision": "project-docs/v6",
+            "sha256": "bee29741dfe2cd9f7ae587711adc65ce12a5a6f919bffe832aaa18bd220dc4d7"
+          },
+          "rules/project-manifest.md": {
+            "sourcePath": "project-rules/project-manifest.md",
+            "revision": "project-manifest/v11",
+            "sha256": "efb8f3200b7a77d6cc6bb958d25fc6ebb0f7bc31cfd8aa518383be40dbe7d35c"
+          }
+        }
+      }
+    }
+  }
+}

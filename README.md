@@ -20,7 +20,8 @@ uv build --all-packages
 ```
 
 [`config/codex.toml`](config/codex.toml) contains the local `design` server registration. Its
-launch command assumes this repository remains at `/root/Desktop/mcp-servers`.
+launch command uses this checkout at `/home/ashe/desktop/mcp-servers` and stores design
+artifacts in the Git-backed `/home/ashe/desktop/plan` workspace.
 
 ## Adding a server
 

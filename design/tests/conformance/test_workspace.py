@@ -16,12 +16,13 @@ def test_client_config_registers_only_local_workspace_servers() -> None:
         "command": "uv",
         "args": [
             "--directory",
-            "/root/Desktop/mcp-servers",
+            "/home/ashe/desktop/mcp-servers",
             "run",
             "--package",
             "mcp-server-design",
             "mcp-design",
         ],
+        "env": {"PLAN_DIR": "/home/ashe/desktop/plan"},
     }
 
 
