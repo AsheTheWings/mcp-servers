@@ -93,15 +93,15 @@ def test_build_can_scaffold_a_standalone_design(tmp_path: Path) -> None:
     design_path = plan / "design" / standalone["design_filename"]
     document = store.read_document(design_path, "design document")
     assert standalone["requirements_created"] is False
-    assert standalone["requirements_path"] is None
+    assert "requirements_path" not in standalone
     assert "requirements" not in document.metadata
     assert document.metadata["status"] == "active"
     assert document.metadata["repos"] == standalone["repositories"]
     assert document.body == "# Standalone architecture\n\n## Design\n\nTBD.\n"
     assert not plan.joinpath("requirements").exists()
     verified = store.verify_design(standalone["design_filename"])
-    assert verified["requirements_path"] is None
-    assert verified["requirement_count"] is None
+    assert "requirements_path" not in verified
+    assert "requirement_count" not in verified
     assert verified["status"] == "active"
     assert verified["repositories"][str(repo)]["current_changes_from_design"] == {
         "files_changed": 0,

@@ -32,7 +32,6 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
             "memory_record_decision",
             "memory_set_issue",
             "memory_list_open_issues",
-            "write_review",
         }
         assert tools["verify"].annotations.read_only_hint is True
         assert tools["build"].input_schema["properties"]["include_requirements"] == {
@@ -54,7 +53,7 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         )
         assert standalone.is_error is False
         assert standalone.structured_content["requirements_created"] is False
-        assert standalone.structured_content["requirements_path"] is None
+        assert "requirements_path" not in standalone.structured_content
         standalone_path = plan / "design" / standalone.structured_content["design_filename"]
         assert (
             "requirements" not in designs.read_document(standalone_path, "design document").metadata
@@ -63,8 +62,8 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
             "verify", {"design_filename": standalone.structured_content["design_filename"]}
         )
         assert standalone_verified.is_error is False
-        assert standalone_verified.structured_content["requirements_path"] is None
-        assert standalone_verified.structured_content["requirement_count"] is None
+        assert "requirements_path" not in standalone_verified.structured_content
+        assert "requirement_count" not in standalone_verified.structured_content
         built = await client.call_tool("build", {"repos": [str(repo)], "title": "Protocol test"})
         assert "design_path" not in built.structured_content
         design_filename = built.structured_content["design_filename"]
@@ -89,14 +88,6 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
         )
         open_issues = await client.call_tool(
             "memory_list_open_issues", {"design_filename": design_filename}
-        )
-        reviewed = await client.call_tool(
-            "write_review",
-            {
-                "design_filename": design_filename,
-                "content": "# Review\n\nApproved.",
-                "reviewer": "conformance",
-            },
         )
         captured = await client.call_tool(
             "capture_implementation", {"design_filename": design_filename}
@@ -134,17 +125,6 @@ async def test_protocol_discovers_and_executes_design_lifecycle(tmp_path: Path) 
     assert set(issue.structured_content) == {"issue_id", "memory_path", "pruned", "memory"}
     assert "design_path" not in open_issues.structured_content
     assert "memory_path" in open_issues.structured_content
-    assert reviewed.is_error is False
-    assert set(reviewed.structured_content) == {
-        "design_filename",
-        "review_number",
-        "review_path",
-    }
-    review_path = Path(reviewed.structured_content["review_path"])
-    assert review_path.is_absolute()
-    assert review_path.parent == plan / "reviews"
-    assert review_path.name == f"{design_filename[:-3]}-1.md"
-    assert review_path.read_text(encoding="utf-8").endswith("# Review\n\nApproved.\n")
     assert captured.structured_content["status"] == "implemented"
     memory_errors = "".join(
         content.text

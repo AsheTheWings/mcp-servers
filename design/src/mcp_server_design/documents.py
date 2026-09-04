@@ -40,10 +40,6 @@ class Settings:
     def memory_dir(self) -> Path:
         return self.plan_dir / "memory"
 
-    @property
-    def reviews_dir(self) -> Path:
-        return self.plan_dir / "reviews"
-
 
 @dataclass
 class Document:
@@ -445,9 +441,8 @@ class DesignStore:
             except Exception:
                 design_path.unlink(missing_ok=True)
                 raise
-        return {
+        result: dict[str, Any] = {
             "design_filename": design_path.name,
-            "requirements_path": str(requirements_path) if requirements_path is not None else None,
             "requirements_created": requirements_path is not None,
             "status": "active",
             "delegated_review": delegated_review,
@@ -458,6 +453,9 @@ class DesignStore:
             if relation and related
             else None,
         }
+        if requirements_path is not None:
+            result["requirements_path"] = str(requirements_path)
+        return result
 
     @staticmethod
     def _requirement_headings(body: str) -> list[tuple[int, int | None, str]]:
@@ -616,14 +614,16 @@ class DesignStore:
                 if implementation is not None
                 else None,
             }
-        return {
+        verified: dict[str, Any] = {
             "design_filename": design_path.name,
-            "requirements_path": str(requirements_path) if requirements_path else None,
             "status": status,
             "delegated_review": design.metadata["delegated_review"],
-            "requirement_count": requirement_count,
             "repositories": results,
         }
+        if requirements_path is not None:
+            verified["requirements_path"] = str(requirements_path)
+            verified["requirement_count"] = requirement_count
+        return verified
 
     def capture_implementation(self, design_doc: str) -> dict[str, Any]:
         design_path, requirements_path = self.resolve_pair(design_doc)
