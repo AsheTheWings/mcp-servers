@@ -175,12 +175,9 @@ def create_server(
     return server
 
 
-mcp = create_server()
-
-
 def main() -> None:
     """Run the local server over stdio."""
-    mcp.run()
+    create_server().run()
 
 
 if __name__ == "__main__":

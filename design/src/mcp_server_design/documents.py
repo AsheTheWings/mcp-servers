@@ -23,7 +23,10 @@ class Settings:
 
     @classmethod
     def from_environment(cls) -> Settings:
-        return cls(Path(os.environ.get("PLAN_DIR", "/root/Desktop/plan")).expanduser().resolve())
+        value = os.environ.get("PLAN_DIR", "").strip()
+        if not value:
+            raise ValueError("Set PLAN_DIR to the Git-backed plan workspace")
+        return cls(Path(value).expanduser().resolve())
 
     @property
     def design_dir(self) -> Path:

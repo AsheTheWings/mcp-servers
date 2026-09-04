@@ -12,6 +12,17 @@ def git_init(path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(path)], check=True)
 
 
+def test_settings_require_plan_dir(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PLAN_DIR", raising=False)
+    with pytest.raises(ValueError, match="PLAN_DIR"):
+        Settings.from_environment()
+
+
+def test_settings_resolve_plan_dir(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PLAN_DIR", str(tmp_path))
+    assert Settings.from_environment().plan_dir == tmp_path
+
+
 def test_pair_lifecycle_tracks_dirty_working_tree_snapshots(tmp_path: Path) -> None:
     plan = tmp_path / "plan"
     repo = tmp_path / "service"

@@ -19,9 +19,16 @@ uv run pytest
 uv build --all-packages
 ```
 
-[`config/codex.toml`](config/codex.toml) contains the local `design` server registration. Its
-launch command uses this checkout at `/home/ashe/desktop/mcp-servers` and stores design
-artifacts in the Git-backed `/home/ashe/desktop/plan` workspace.
+## Client registration
+
+Install the design server as a uv tool pinned to a reviewed commit, then register the
+`mcp-design` command in the harness. The server requires `PLAN_DIR` naming the machine's
+Git-backed plan workspace; the harness registration must supply it.
+
+```sh
+uv tool install \
+  'git+ssh://git@github.com/AsheTheWings/mcp-servers.git@<full-commit>#subdirectory=design'
+```
 
 ## Adding a server
 
