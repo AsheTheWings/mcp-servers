@@ -3,9 +3,10 @@
 Read `README.md` before changing this repository.
 
 - `design/src/` owns the installable local stdio server and all design lifecycle domains.
+- `browserctl-dev/src/` owns the development-only stable wrapper and replaceable Browserctl
+  child lifecycle.
 - Client registration lives in host harness configuration, never in this repository.
-  `README.md` owns the registration contract: the installable `mcp-design` command and
-  the required `PLAN_DIR` environment variable.
+  `README.md` owns the registration contract for installable commands.
 - Pin the MCP SDK exactly in every server package and update the workspace lockfile with it.
 - Prefer typed `MCPServer.tool()` handlers and structured return models over hand-written
   protocol dispatch. Add behavioral annotations and keep transport startup in the adapter.

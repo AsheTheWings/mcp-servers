@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-server-browserctl-dev"
+version = "1.0.0"
+description = "Development wrapper for a replaceable Browserctl MCP gateway"
+requires-python = ">=3.11"
+dependencies = ["mcp==2.0.0", "pydantic==2.13.4"]
+
+[project.scripts]
+mcp-browserctl-dev = "mcp_server_browserctl_dev.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server_browserctl_dev"]

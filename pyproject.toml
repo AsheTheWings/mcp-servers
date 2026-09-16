@@ -13,11 +13,11 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["design"]
+members = ["browserctl-dev", "design"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --import-mode=importlib"
-testpaths = ["design"]
+testpaths = ["browserctl-dev", "design"]
 python_files = ["test_*.py"]
 markers = [
   "component: in-process test through an MCP protocol boundary",
@@ -35,4 +35,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 quote-style = "double"
 
 [tool.ty.src]
-exclude = ["design/tests/**"]
+exclude = ["browserctl-dev/tests/**", "design/tests/**"]
