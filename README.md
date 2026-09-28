@@ -4,8 +4,6 @@ This repository contains independently installable local Model Context Protocol 
 
 - [`browserctl-dev`](browserctl-dev/README.md) keeps one stable development MCP connection
   while replacing the Browserctl child gateway after a new development release is activated.
-- `design` scaffolds standalone design documents or linked design and requirements documents,
-  and manages paired implementation snapshots and design-scoped memory over stdio.
 
 ## Setup and verification
 
@@ -22,18 +20,10 @@ uv build --all-packages
 
 ## Client registration
 
-Install the design server as a uv tool pinned to a reviewed commit, then register the
-`mcp-design` command in the harness. The server requires `PLAN_DIR` naming the machine's
-Git-backed plan workspace; the harness registration must supply it.
-
-```sh
-uv tool install \
-  'git+ssh://git@github.com/AsheTheWings/mcp-servers.git@<full-commit>#subdirectory=design'
-```
-
-Install `browserctl-dev` the same way and register `mcp-browserctl-dev` only in a development
-harness. It exposes a stable `list_tools`, `call_tool`, and `restart_server` surface while the
-production harness continues to register Browserctl directly.
+Install each server as a uv tool pinned to a reviewed commit, then register its command in
+the harness. Register `mcp-browserctl-dev` only in a development harness. It exposes a stable
+`list_tools`, `call_tool`, and `restart_server` surface while the production harness continues
+to register Browserctl directly.
 
 ```sh
 uv tool install \
