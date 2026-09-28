@@ -18,6 +18,8 @@ uv run pytest
 uv build --all-packages
 ```
 
+[Testing](docs/testing.md) describes the test classes and gates.
+
 ## Client registration
 
 Install each server as a uv tool pinned to a reviewed commit, then register its command in
@@ -37,5 +39,3 @@ workspace member, and expose a console script that runs stdio by default. Keep d
 separate from the MCP adapter. Add pure unit tests for domain invariants and at least one
 component test using `mcp.Client(server)` so discovery, schema generation, structured output,
 and error behavior are exercised through the protocol.
-
-See [`AGENTS.md`](AGENTS.md) for maintenance rules.
